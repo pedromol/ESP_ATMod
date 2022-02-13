@@ -1,2 +1,4 @@
 ## Ignore all certificate files in the data folder
 ESP_ATMod/data/*
+.pio
+.vscode
