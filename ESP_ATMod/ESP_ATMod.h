@@ -111,6 +111,8 @@ void DeleteClient(uint8_t index);
 void setDhcpMode();
 void setDns();
 int SendData(int clientIndex, int maxSize);
+void ATMod_setup();
+void ATMod_loop();
 
 const char *nullIfEmpty(String &s);
 

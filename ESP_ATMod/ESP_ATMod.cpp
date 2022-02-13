@@ -47,11 +47,9 @@
  * - TLS Security - persistent fingerprint and single certificate, AT+CIPSSLAUTH_DEF
  */
 
-#include "Arduino.h"
 #include "LittleFS.h"
 #include "string.h"
 
-#include <ESP8266WiFi.h>
 #include <PolledTimeout.h>
 
 extern "C"
@@ -67,8 +65,6 @@ extern "C"
 #include "settings.h"
 #include "debug.h"
 #include "asnDecode.h"
-
-#include <ESP8266WebServer.h>
 
 /*
  * Defines
@@ -137,69 +133,16 @@ bool gsSTNPEnabled = true;			// command AT+CIPSNTPCFG
 int8_t gsSTNPTimezone = 0;			// command AT+CIPSNTPCFG
 String gsSNTPServer[3];				// command AT+CIPSNTPCFG
 
-bool pinOne = false;
-bool pinTwo = false;
-
 /*
  * Local prototypes
  */
 static bool checkCertificateDuplicatesAndLoad(BearSSL::X509List &importCertList);
 
-ESP8266WebServer server(80);
-
-void handleIndex()
-{
-	time_t now = time(nullptr);
-
-	if (gsSTNPEnabled && (now > 8 * 3600 * 2))
-		now += gsSTNPTimezone * 3600;
-	else
-		now = 0;
-
-	struct tm *info = localtime((const time_t *)&now);
-
-	char response[168];
-	char parsedTime[100];
-
-	strftime(parsedTime, sizeof(parsedTime), "%Y-%m-%dT%T.000%z", info);
-
-	sprintf(response, "{\"time\":\"%s\",\"pins\":[{\"id\":1, \"state\":%s},{\"id\":2, \"state\":%s}]}", parsedTime, pinOne ? "true" : "false", pinTwo ? "true" : "false");
-
-	server.send(200, "application/json", response);
-}
-
-bool handlePin(int pin, bool state)
-{
-	digitalWrite(pin, state == true ? LOW : HIGH);
-	return !state;
-}
-
-void handleOne()
-{
-	pinOne = handlePin(1, pinOne);
-	handleIndex();
-}
-
-void handleTwo()
-{
-	pinTwo = handlePin(2, pinTwo);
-	handleIndex();
-}
-
-void startPin(int pin)
-{
-	pinMode(pin, OUTPUT);
-	digitalWrite(pin, LOW);
-}
-
 /*
  *  The setup function is called once at startup of the sketch
  */
-void setup()
+void ATMod_setup()
 {
-	startPin(1);
-	startPin(2);
-
 	// Default static net configuration
 	gsCipStaCfg = Settings::getNetConfig();
 
@@ -329,20 +272,9 @@ void setup()
 	}
 	else
 	{
-		Serial.printf_P("\nInizializing FS failed.");
+		Serial.printf_P("\nInitializing FS failed.");
 		Serial.printf_P(MSG_ERROR);
 	}
-
-	WiFi.disconnect();
-	Serial.printf_P("\nStarting default connection.");
-
-	WiFi.begin("WIFI SSID", "WIFI KEY");
-
-	while (!WiFi.isConnected()) {
-		Serial.print(".");
-		delay(1000);
-	}
-	Serial.print("");
 
 	if (gsSTNPEnabled && time(nullptr) < 8 * 3600 * 2)
 	{
@@ -350,25 +282,15 @@ void setup()
 		configTime(0, 0, nullIfEmpty(gsSNTPServer[0]), nullIfEmpty(gsSNTPServer[1]), nullIfEmpty(gsSNTPServer[2]));
 	}
 
-	Serial.println(F("\r\nstarting server"));
-
-	server.on("/", handleIndex); // Handle Index page
-	server.on("/1", handleOne);
-	server.on("/2", handleTwo);
-
-	server.begin(); // Start the server
-
 	Serial.println(F("\r\nready"));
 }
 
 /*
  *  The loop function is called in an endless loop
  */
-void loop()
+void ATMod_loop()
 {
-	server.handleClient(); // Handling of incoming client requests
 	bool lineCompleted = false;
-
 	// Check for data and closed connections - only when we can transmit data
 
 	if (Serial.availableForWrite())

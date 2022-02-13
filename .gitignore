@@ -2,3 +2,4 @@
 ESP_ATMod/data/*
 .pio
 .vscode
+ESP_ATMod/credentials.h
