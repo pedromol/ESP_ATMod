@@ -333,15 +333,16 @@ void setup()
 		Serial.printf_P(MSG_ERROR);
 	}
 
+	WiFi.disconnect();
 	Serial.printf_P("\nStarting default connection.");
 
-	IPAddress ip(192, 168, 1, 138);
-	IPAddress dn(192, 168, 1, 132);
-	IPAddress gw(192, 168, 1, 1);
-	IPAddress nm(255, 255, 255, 0);
-	WiFi.config(ip, dn, gw, nm);
-
 	WiFi.begin("WIFI SSID", "WIFI KEY");
+
+	while (!WiFi.isConnected()) {
+		Serial.print(".");
+		delay(1000);
+	}
+	Serial.print("");
 
 	if (gsSTNPEnabled && time(nullptr) < 8 * 3600 * 2)
 	{
