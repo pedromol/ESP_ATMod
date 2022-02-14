@@ -1,6 +1,6 @@
 #include "Arduino.h"
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+#include <ESPAsyncWebServer.h>
+#include "fauxmoESP.h"
 
 #include <AsyncTimer.h>
 
@@ -10,10 +10,10 @@
 bool pinState = false;
 unsigned short pinDebounce = 0;
 AsyncTimer t;
+fauxmoESP fauxmo;
+AsyncWebServer server(80);
 
-ESP8266WebServer server(80);
-
-void handleIndex()
+void sendStatus(AsyncWebServerRequest *request)
 {
     time_t now = time(nullptr);
     struct tm *info = localtime((const time_t *)&now);
@@ -25,28 +25,14 @@ void handleIndex()
 
     sprintf(response, "{\"time\":\"%s\",\"pinState\":\"%s\"}", parsedTime, pinState ? "On" : "Off");
 
-    server.send(200, "application/json", response);
+    request->send(200, "application/json", response);
 }
 
-void handleToggle()
+void handleState(bool state)
 {
-    pinState = !pinState;
-    digitalWrite(2, pinState == true ? LOW : HIGH);
-    handleIndex();
-}
-
-void handleOn()
-{
-    pinState = true;
-    digitalWrite(2, HIGH);
-    handleIndex();
-}
-
-void handleOff()
-{
-    pinState = false;
-    digitalWrite(2, LOW);
-    handleIndex();
+    pinState = state;
+    digitalWrite(2, pinState == true ? HIGH : LOW);
+    fauxmo.setState(DEVICE_NAME, pinState, pinState == true ? 255 : 0);
 }
 
 void handleButtom()
@@ -61,12 +47,57 @@ void handleButtom()
         {
             pinDebounce = t.setTimeout([]()
                                        {
-					pinState = !pinState;
-					digitalWrite(2, pinState == true ? LOW : HIGH);
+                    handleState(!pinState);
 					pinDebounce = 0; },
                                        666);
         }
     }
+}
+
+void serverSetup()
+{
+    Serial.println("Starting server");
+
+    server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request)
+              { sendStatus(request); });
+
+    server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
+              { 
+                handleState(true);
+                sendStatus(request); });
+
+    server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
+              { 
+                handleState(false);
+                sendStatus(request); });
+
+    server.on("/toggle", HTTP_GET, [](AsyncWebServerRequest *request)
+              {   
+                handleState(!pinState);
+                sendStatus(request); });
+
+    server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+                         {
+        if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), String((char *)data))) return; });
+    server.onNotFound([](AsyncWebServerRequest *request)
+                      {
+        String body = (request->hasParam("body", true)) ? request->getParam("body", true)->value() : String();
+        if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), body)) return; });
+
+    server.begin();
+}
+
+void setupFauxmo()
+{
+    Serial.println("Starting Fauxmo");
+
+    fauxmo.createServer(false);
+    fauxmo.setPort(80);
+    fauxmo.enable(true);
+    fauxmo.addDevice(DEVICE_NAME);
+
+    fauxmo.onSetState([](unsigned char device_id, const char *device_name, bool state, unsigned char value)
+                      { handleState(!state); });
 }
 
 void setup()
@@ -90,20 +121,14 @@ void setup()
     }
     Serial.print("");
 
-    Serial.println("Starting server");
-
-    server.on("/", handleIndex); // Handle Index page
-    server.on("/on", handleOn);
-    server.on("/off", handleOff);
-    server.on("/toggle", handleToggle);
-
-    server.begin(); // Start the server
+    serverSetup();
+    setupFauxmo();
 }
 
 void loop()
 {
     t.handle();
-    server.handleClient(); // Handling of incoming client requests
+    fauxmo.handle();
 
     handleButtom();
 
