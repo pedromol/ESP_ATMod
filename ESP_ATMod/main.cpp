@@ -7,11 +7,19 @@
 #include "credentials.h"
 #include "ESP_ATMod.h"
 
+#include <PubSubClient.h>
+
+#define STATE_TOPIC ( "switch/" DEVICE_NAME "/get" )
+#define COMMAND_TOPIC ( "switch/" DEVICE_NAME "/set" )
+
 bool pinState = false;
 unsigned short pinDebounce = 0;
 AsyncTimer t;
 fauxmoESP fauxmo;
 AsyncWebServer server(80);
+
+WiFiClient wifiClient;
+PubSubClient pubSubClient(wifiClient);
 
 void sendStatus(AsyncWebServerRequest *request)
 {
@@ -25,7 +33,7 @@ void sendStatus(AsyncWebServerRequest *request)
 
     sprintf(response, "{\"time\":\"%s\",\"pinState\":\"%s\"}", parsedTime, pinState ? "On" : "Off");
 
-    request->send(200, "application/json", response);
+    request->send(200, F("application/json"), response);
 }
 
 void handleState(bool state)
@@ -33,6 +41,7 @@ void handleState(bool state)
     pinState = state;
     digitalWrite(2, pinState == true ? HIGH : LOW);
     fauxmo.setState(DEVICE_NAME, pinState, pinState == true ? 255 : 0);
+    pubSubClient.publish(STATE_TOPIC, pinState ? "1" : "0", true);
 }
 
 void handleButtom()
@@ -54,9 +63,14 @@ void handleButtom()
     }
 }
 
+void handleSub(char *topic, byte *payload, unsigned int length)
+{
+    handleState((char)payload[0] == '1');
+}
+
 void serverSetup()
 {
-    Serial.println("Starting server");
+    Serial.println(F("Starting Server"));
 
     server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request)
               { sendStatus(request); });
@@ -87,9 +101,9 @@ void serverSetup()
     server.begin();
 }
 
-void setupFauxmo()
+void fauxmoSetup()
 {
-    Serial.println("Starting Fauxmo");
+    Serial.println(F("Starting Fauxmo"));
 
     fauxmo.createServer(false);
     fauxmo.setPort(80);
@@ -98,6 +112,32 @@ void setupFauxmo()
 
     fauxmo.onSetState([](unsigned char device_id, const char *device_name, bool state, unsigned char value)
                       { handleState(!state); });
+}
+
+void pubSubHandle()
+{
+    while (!pubSubClient.connected())
+    {
+        if (!pubSubClient.connect(DEVICE_NAME))
+        {
+            Serial.print(F("."));
+            delay(1000);
+        }
+        else
+        {
+            pubSubClient.subscribe(COMMAND_TOPIC);
+        }
+    }
+    pubSubClient.loop();
+}
+
+void pubSubSetup()
+{
+    Serial.println(F("Starting PubSub"));
+
+    pubSubClient.setServer(MQTT_SERVER, 1883);
+    pubSubClient.setCallback(handleSub);
+    pubSubHandle();
 }
 
 void setup()
@@ -110,27 +150,31 @@ void setup()
 
     WiFi.disconnect();
     Serial.println("");
-    Serial.println("Starting default connection.");
+    Serial.println(F("Starting default connection."));
 
     WiFi.begin(WIFI_SSID, WIFI_PASS);
 
     while (!WiFi.isConnected())
     {
-        Serial.print(".");
+        Serial.print(F("."));
         delay(1000);
     }
     Serial.print("");
 
     serverSetup();
-    setupFauxmo();
+    fauxmoSetup();
+    pubSubSetup();
+    handleState(false);
 }
 
 void loop()
 {
-    t.handle();
-    fauxmo.handle();
-
     handleButtom();
 
     ATMod_loop();
+
+    fauxmo.handle();
+    pubSubHandle();
+
+    t.handle();
 }

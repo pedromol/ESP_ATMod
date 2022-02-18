@@ -1299,7 +1299,7 @@ void cmd_AT_CIPSTART()
 			// Connect using remote host name, not ip address (necessary for TLS)
 			if (!cli->connect(remoteAddr, remotePort))
 			{
-				Serial.println("connect fail");
+				Serial.println(F("connect fail"));
 
 				delete cli;
 				error = 100;
@@ -1402,7 +1402,7 @@ void cmd_AT_CIPSEND()
 		{
 			if (gsCipMux == 0)
 			{
-				Serial.println("MUX=0");
+				Serial.println(F("MUX=0"));
 				break;
 			}
 
@@ -1726,7 +1726,7 @@ void cmd_AT_CIPRECVDATA()
 		{
 			if (gsCipMux == 0)
 			{
-				Serial.println("MUX=0");
+				Serial.println(F("MUX=0"));
 				break;
 			}
 
@@ -2185,7 +2185,7 @@ void cmd_AT_CIPSSLFP()
 		}
 		else
 		{
-			Serial.println("not valid");
+			Serial.println(F("not valid"));
 			Serial.printf_P(MSG_ERROR);
 		}
 	}
