@@ -9,8 +9,8 @@
 
 #include <PubSubClient.h>
 
-#define STATE_TOPIC ( "switch/" DEVICE_NAME "/get" )
-#define COMMAND_TOPIC ( "switch/" DEVICE_NAME "/set" )
+#define STATE_TOPIC ("switch/" DEVICE_NAME "/get")
+#define COMMAND_TOPIC ("switch/" DEVICE_NAME "/set")
 
 bool pinState = false;
 unsigned short pinDebounce = 0;
@@ -111,7 +111,9 @@ void fauxmoSetup()
     fauxmo.addDevice(DEVICE_NAME);
 
     fauxmo.onSetState([](unsigned char device_id, const char *device_name, bool state, unsigned char value)
-                      { handleState(!state); });
+                      { t.setTimeout([]()
+                                     { handleState(!pinState); },
+                                     666); });
 }
 
 void pubSubHandle()
