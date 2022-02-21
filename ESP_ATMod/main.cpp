@@ -39,9 +39,11 @@ void sendStatus(AsyncWebServerRequest *request)
 void handleState(bool state)
 {
     pinState = state;
+    Serial.print(F("New State : "));
+    Serial.println(pinState);
     digitalWrite(2, pinState == true ? HIGH : LOW);
-    fauxmo.setState(DEVICE_NAME, pinState, pinState == true ? 255 : 0);
     pubSubClient.publish(STATE_TOPIC, pinState ? "1" : "0", true);
+    fauxmo.setState(DEVICE_NAME, pinState, pinState == true ? 255 : 0);
 }
 
 void handleButtom()
@@ -95,8 +97,11 @@ void serverSetup()
         if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), String((char *)data))) return; });
     server.onNotFound([](AsyncWebServerRequest *request)
                       {
-        String body = (request->hasParam("body", true)) ? request->getParam("body", true)->value() : String();
-        if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), body)) return; });
+        String body = (request->hasParam(F("body"), true)) ? request->getParam(F("body"), true)->value() : String();
+        if (fauxmo.process(request->client(), request->method() == HTTP_GET, request->url(), body)) {
+            return;
+        } else {
+            request->send(404, F("text/plain"), F("Not found")); } });
 
     server.begin();
 }
@@ -153,7 +158,7 @@ void setup()
     ATMod_setup();
 
     WiFi.disconnect();
-    Serial.println("");
+    Serial.println(F(""));
     Serial.println(F("Starting default connection."));
 
     WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -163,7 +168,7 @@ void setup()
         Serial.print(F("."));
         delay(1000);
     }
-    Serial.print("");
+    Serial.println(F(""));
 
     serverSetup();
     fauxmoSetup();
