@@ -111,8 +111,10 @@ void fauxmoSetup()
     fauxmo.addDevice(DEVICE_NAME);
 
     fauxmo.onSetState([](unsigned char device_id, const char *device_name, bool state, unsigned char value)
-                      { t.setTimeout([]()
-                                     { handleState(!pinState); },
+                      { 
+                          pinState=state;
+                          t.setTimeout([]()
+                                     { handleState(pinState); },
                                      666); });
 }
 
