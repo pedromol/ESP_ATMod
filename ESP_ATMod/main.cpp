@@ -12,6 +12,8 @@
 #define STATE_TOPIC ("switch/" DEVICE_NAME "/get")
 #define COMMAND_TOPIC ("switch/" DEVICE_NAME "/set")
 
+#define PIN_DEBOUNCE_DELAY 700
+
 bool pinState = false;
 unsigned short pinDebounce = 0;
 AsyncTimer t;
@@ -38,36 +40,40 @@ void sendStatus(AsyncWebServerRequest *request)
 
 void handleState(bool state)
 {
-    pinState = state;
-    Serial.print(F("New State : "));
-    Serial.println(pinState);
-    digitalWrite(2, pinState == true ? HIGH : LOW);
-    pubSubClient.publish(STATE_TOPIC, pinState ? "1" : "0", true);
-    fauxmo.setState(DEVICE_NAME, pinState, pinState == true ? 255 : 0);
+    Serial.println(state);
+    if (pinDebounce != 0)
+    {
+        t.reset(pinDebounce);
+    }
+    else
+    {
+        pinState = state;
+        pinDebounce = t.setTimeout([]()
+                                   {
+                                       Serial.print(F("New State : "));
+                                       digitalWrite(2, pinState);
+                                       pubSubClient.publish(STATE_TOPIC, pinState ? "1" : "0", true);
+                                       fauxmo.setState(DEVICE_NAME, pinState, pinState ? 255 : 0);
+                                       pinDebounce = 0;
+                                       Serial.println(pinState ? "On" : "Off"); },
+                                   PIN_DEBOUNCE_DELAY);
+    }
 }
 
 void handleButtom()
 {
     if (digitalRead(0) == LOW)
     {
-        if (pinDebounce != 0)
-        {
-            t.reset(pinDebounce);
-        }
-        else
-        {
-            pinDebounce = t.setTimeout([]()
-                                       {
-                    handleState(!pinState);
-					pinDebounce = 0; },
-                                       666);
-        }
+        handleState(!pinState);
     }
 }
 
 void handleSub(char *topic, byte *payload, unsigned int length)
 {
-    handleState((char)payload[0] == '1');
+    if (strcmp(topic, COMMAND_TOPIC) == 0)
+    {
+        handleState((char)payload[0] == '1');
+    }
 }
 
 void serverSetup()
@@ -116,11 +122,7 @@ void fauxmoSetup()
     fauxmo.addDevice(DEVICE_NAME);
 
     fauxmo.onSetState([](unsigned char device_id, const char *device_name, bool state, unsigned char value)
-                      { 
-                          pinState=state;
-                          t.setTimeout([]()
-                                     { handleState(pinState); },
-                                     666); });
+                      { handleState(state); });
 }
 
 void pubSubHandle()
@@ -145,13 +147,14 @@ void pubSubSetup()
     Serial.println(F("Starting PubSub"));
 
     pubSubClient.setServer(MQTT_SERVER, 1883);
+    pubSubClient.setKeepAlive(65535);
     pubSubClient.setCallback(handleSub);
     pubSubHandle();
 }
 
 void setup()
 {
-    pinMode(1, INPUT);
+    pinMode(0, INPUT);
     pinMode(2, OUTPUT);
     digitalWrite(2, LOW);
 
@@ -182,8 +185,8 @@ void loop()
 
     ATMod_loop();
 
-    fauxmo.handle();
     pubSubHandle();
 
     t.handle();
+    fauxmo.handle();
 }
