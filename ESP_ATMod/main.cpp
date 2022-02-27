@@ -9,10 +9,12 @@
 
 #include <PubSubClient.h>
 
+#define HEALTH_TOPIC ("health/" DEVICE_NAME)
 #define STATE_TOPIC ("switch/" DEVICE_NAME "/get")
 #define COMMAND_TOPIC ("switch/" DEVICE_NAME "/set")
 
 #define PIN_DEBOUNCE_DELAY 700
+#define HEALTH_CHECK_INTERVAL 30000
 
 bool pinState = false;
 unsigned short pinDebounce = 0;
@@ -40,7 +42,6 @@ void sendStatus(AsyncWebServerRequest *request)
 
 void handleState(bool state)
 {
-    Serial.println(state);
     if (pinDebounce != 0)
     {
         t.reset(pinDebounce);
@@ -177,6 +178,10 @@ void setup()
     fauxmoSetup();
     pubSubSetup();
     handleState(false);
+
+    t.setInterval([]()
+                  { pubSubClient.publish(HEALTH_TOPIC, "OK", false); },
+                  HEALTH_CHECK_INTERVAL);
 }
 
 void loop()
