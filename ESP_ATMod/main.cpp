@@ -25,6 +25,11 @@ AsyncWebServer server(80);
 WiFiClient wifiClient;
 PubSubClient pubSubClient(wifiClient);
 
+bool publishMessage(const char* topic, const char* payload, boolean retained)
+{
+    return pubSubClient.publish(topic, payload, retained);
+}
+
 void sendStatus(AsyncWebServerRequest *request)
 {
     time_t now = time(nullptr);
@@ -40,7 +45,12 @@ void sendStatus(AsyncWebServerRequest *request)
     request->send(200, F("application/json"), response);
 }
 
-void handleState(bool state)
+bool getPinState()
+{
+    return pinState;
+}
+
+void handlePinState(bool state)
 {
     if (pinDebounce != 0)
     {
@@ -65,7 +75,7 @@ void handleButtom()
 {
     if (digitalRead(0) == LOW)
     {
-        handleState(!pinState);
+        handlePinState(!pinState);
     }
 }
 
@@ -73,7 +83,7 @@ void handleSub(char *topic, byte *payload, unsigned int length)
 {
     if (strcmp(topic, COMMAND_TOPIC) == 0)
     {
-        handleState((char)payload[0] == '1');
+        handlePinState((char)payload[0] == '1');
     }
 }
 
@@ -86,17 +96,17 @@ void serverSetup()
 
     server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
               { 
-                handleState(true);
+                handlePinState(true);
                 sendStatus(request); });
 
     server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
               { 
-                handleState(false);
+                handlePinState(false);
                 sendStatus(request); });
 
     server.on("/toggle", HTTP_GET, [](AsyncWebServerRequest *request)
               {   
-                handleState(!pinState);
+                handlePinState(!pinState);
                 sendStatus(request); });
 
     server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
@@ -123,7 +133,7 @@ void fauxmoSetup()
     fauxmo.addDevice(DEVICE_NAME);
 
     fauxmo.onSetState([](unsigned char device_id, const char *device_name, bool state, unsigned char value)
-                      { handleState(state); });
+                      { handlePinState(state); });
 }
 
 void pubSubHandle()
@@ -177,7 +187,7 @@ void setup()
     serverSetup();
     fauxmoSetup();
     pubSubSetup();
-    handleState(false);
+    handlePinState(false);
 
     t.setInterval([]()
                   { pubSubClient.publish(HEALTH_TOPIC, "OK", false); },

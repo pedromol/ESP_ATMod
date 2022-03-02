@@ -31,6 +31,7 @@
 #include "settings.h"
 #include "asnDecode.h"
 #include "debug.h"
+#include "main.h"
 
 /*
  * Constants
@@ -111,7 +112,10 @@ static const commandDef_t commandList[] = {
 	{"+CIPSSLCERT", MODE_NO_CHECKING, CMD_AT_CIPSSLCERT},
 	{"+CIPSSLMFLN", MODE_QUERY_SET, CMD_AT_CIPSSLMFLN},
 	{"+CIPSSLSTA", MODE_NO_CHECKING, CMD_AT_CIPSSLSTA},
-	{"+SNTPTIME?", MODE_EXACT_MATCH, CMD_AT_SNTPTIME}};
+	{"+SNTPTIME?", MODE_EXACT_MATCH, CMD_AT_SNTPTIME},
+
+	{"+PINSTATE", MODE_QUERY_SET, CMD_AT_PINSTATE},
+	{"+PUBMSG", MODE_QUERY_SET, CMD_AT_PUBMSG}};
 
 /*
  * Static functions
@@ -182,6 +186,9 @@ static void cmd_AT_CIPSSLCERT();
 static void cmd_AT_CIPSSLMFLN();
 static void cmd_AT_CIPSSLSTA();
 static void cmd_AT_SNTPTIME();
+
+static void cmd_AT_PINSTATE();
+static void cmd_AT_PUBMSG();
 
 /*
  * Processes the command buffer
@@ -358,6 +365,12 @@ void processCommandBuffer(void)
 	// ------------------------------------------------------------------------------------ AT+SNTPTIME?
 	else if (cmd == CMD_AT_SNTPTIME) // AT+SNTPTIME? - get time
 		cmd_AT_SNTPTIME();
+
+	else if (cmd == CMD_AT_PINSTATE)
+		cmd_AT_PINSTATE();
+
+	else if (cmd == CMD_AT_PUBMSG)
+		cmd_AT_PUBMSG();
 
 	else
 	{
@@ -2577,6 +2590,92 @@ void cmd_AT_SNTPTIME()
 		Serial.println(F("+SNTPTIME:Enable SNTP first (AT+CIPSNTPCFG)"));
 		Serial.printf_P(MSG_ERROR);
 	}
+}
+
+void cmd_AT_PINSTATE()
+{
+	if (inputBuffer[11] == '?' && inputBufferCnt == 14)
+	{
+		Serial.print(F("+PINSTATE:\""));
+
+		Serial.print(getPinState() == true ? "On" : "Off");
+
+		Serial.println(F("\"\r\n\r\nOK"));
+	}
+	else if (inputBuffer[11] == '=' && inputBuffer[12] == '"')
+	{
+		if (inputBuffer[14] == 'n' || inputBuffer[14] == 'N')
+		{
+			handlePinState(true);
+		}
+		else if (inputBuffer[14] == 'f' || inputBuffer[14] == 'F')
+		{
+			handlePinState(false);
+		}
+		else
+		{
+			Serial.printf_P(MSG_ERROR);
+			return;
+		}
+
+		Serial.printf_P(MSG_OK);
+	}
+	else
+	{
+		Serial.printf_P(MSG_ERROR);
+	}
+}
+
+void cmd_AT_PUBMSG()
+{
+	bool success = false;
+	char topic[32];
+	char payload[32];
+	bool retained = false;
+
+	do
+	{
+		if (inputBuffer[9] != '=' || inputBuffer[10] != '"')
+			break;
+
+		uint16_t offset = 11;
+		uint8_t pos = 0;
+
+		while (pos < sizeof(topic) - 1 && inputBuffer[offset] != '"' && inputBuffer[offset] >= ' ')
+		{
+			topic[pos++] = inputBuffer[offset++];
+		}
+		topic[pos] = 0;
+
+		if (inputBuffer[offset] != '"' || inputBuffer[offset + 1] != ',' || inputBuffer[offset + 2] != '"')
+			break;
+
+		offset += 3;
+
+		pos = 0;
+		while (pos < sizeof(payload) - 1 && inputBuffer[offset] != '"' && inputBuffer[offset] >= ' ')
+		{
+			payload[pos++] = inputBuffer[offset++];
+		}
+		payload[pos] = 0;
+
+		if (inputBuffer[offset] != '"')
+			break;
+
+		retained = inputBuffer[offset + 1] == ',' && inputBuffer[offset + 2] == '1';
+
+		success = true;
+
+		bool sent = publishMessage(topic, payload, retained);
+
+		Serial.printf_P(PSTR("+PUBMSG:%s\r\n"), sent ? "TRUE" : "FALSE");
+
+	} while (0);
+
+	if (success)
+		Serial.printf_P(MSG_OK);
+	else
+		Serial.printf_P(MSG_ERROR);
 }
 
 /*********************************************************************************************

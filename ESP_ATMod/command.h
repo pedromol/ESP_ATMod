@@ -83,6 +83,9 @@ enum commands_t
 	CMD_AT_CIPSSLMFLN,	  // New command
 	CMD_AT_CIPSSLSTA,	  // New command
 	CMD_AT_SNTPTIME,	  // New command
+
+	CMD_AT_PINSTATE,
+	CMD_AT_PUBMSG,
 };
 
 /*
